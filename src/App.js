@@ -48,7 +48,7 @@ const DEMO_LOGS = [
   },
   {
     _id: '6a1034cde76774ed488115ff',
-    provider: 'NSDL',
+    provider: 'NSD1L',
     webhook_id: 'c2f42ae1-0a44-465a-b8a8-b1195fe052ad',
     external_ref_id: 'TXN123',
     merchant_order_id: 'REF123',
@@ -128,7 +128,7 @@ export default function App() {
         logCount={logs.length}
         onLogout={() => setAuthed(false)}
       />
-
+ 
       <div className="main">
         {/* Top bar */}
         <div className="topbar">
