@@ -27,7 +27,7 @@ const DEMO_MERCHANTS = [
     createdAt:        '2026-05-14T12:30:00Z',
   },
 ];
-
+  
 const DEMO_LOGS = [
   {
     _id: '6a102e9ab245f2cd8fedf58b',
