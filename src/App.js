@@ -1,33 +1,37 @@
+// frontend/src/App.js
 import { useState, useEffect, useCallback } from 'react';
-import LoginPage   from './components/LoginPage';
-import Sidebar     from './components/Sidebar';
-import OverviewPage  from './pages/OverviewPage';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import LoginPage from './components/LoginPage';
+import Sidebar from './components/Sidebar';
+import OverviewPage from './pages/OverviewPage';
 import MerchantsPage from './pages/MerchantsPage';
-import WebhooksPage  from './pages/WebhooksPage';
+import WebhooksPage from './pages/WebhooksPage';
+import LambdaWebhooksPage from './pages/LambdaWebhooksPage';
 import { fetchWebhookLogs, fetchMerchants } from './api';
- 
+import { AuthProvider, useAuth } from './context/AuthContext';
+
 // ── Fallback demo data (used when API is unreachable) ────────
 const DEMO_MERCHANTS = [
   {
     _id: 'm1',
-    merchantName:     'TechPay Solutions',
-    callbackUrl:      'https://techpay.io/callback',
+    merchantName: 'TechPay Solutions',
+    callbackUrl: 'https://techpay.io/callback',
     merchantUsername: 'techpay_user',
-    merchantId:       'TECH001',
-    clientId:         'CLI_TECH001',
-    createdAt:        '2026-05-10T08:00:00Z',
+    merchantId: 'TECH001',
+    clientId: 'CLI_TECH001',
+    createdAt: '2026-05-10T08:00:00Z',
   },
   {
     _id: 'm2',
-    merchantName:     'SwiftGate Finance',
-    callbackUrl:      'https://swiftgate.com/wh',
+    merchantName: 'SwiftGate Finance',
+    callbackUrl: 'https://swiftgate.com/wh',
     merchantUsername: 'swiftgate_adm',
-    merchantId:       'SWG002',
-    clientId:         'CLI_SWG002',
-    createdAt:        '2026-05-14T12:30:00Z',
+    merchantId: 'SWG002',
+    clientId: 'CLI_SWG002',
+    createdAt: '2026-05-14T12:30:00Z',
   },
 ];
-  
+
 const DEMO_LOGS = [
   {
     _id: '6a102e9ab245f2cd8fedf58b',
@@ -82,61 +86,106 @@ const DEMO_LOGS = [
   },
 ];
 
-// ── Page meta ────────────────────────────────────────────────
-const PAGE_META = {
-  overview:  { title: 'Dashboard Overview',      sub: 'Real-time payment gateway status' },
-  merchants: { title: 'Merchant Management',     sub: 'Manage and onboard payment merchants' },
-  webhooks:  { title: 'Webhook Event Logs',      sub: 'Callback delivery and processing history' },
+// ── Page titles ────────────────────────────────────────────────
+const PAGE_TITLES = {
+  overview: 'Dashboard Overview',
+  merchants: 'Merchant Management',
+  webhooks: 'Webhook Event Logs',
+  'lambda-webhooks': 'Lambda Webhook Logs',
 };
 
-export default function App() {
-  const [authed,    setAuthed]    = useState(false);
-  const [page,      setPage]      = useState('overview');
+const PAGE_SUBTITLES = {
+  overview: 'Real-time payment gateway status',
+  merchants: 'Manage and onboard payment merchants',
+  webhooks: 'Callback delivery and processing history',
+  'lambda-webhooks': 'AWS Lambda and NSDL webhook events',
+};
+
+// Main App Content (Protected)
+function AppContent() {
+  const [currentPage, setCurrentPage] = useState('overview');
   const [merchants, setMerchants] = useState(DEMO_MERCHANTS);
-  const [logs,      setLogs]      = useState(DEMO_LOGS);
-  const [loading,   setLoading]   = useState(false);
+  const [logs, setLogs] = useState(DEMO_LOGS);
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const { logout } = useAuth();
+
+  // Function to clear backend cache
+  const clearBackendCache = async () => {
+    try {
+      await fetch('http://localhost:5000/api/webhook/clear-cache', {
+        method: 'POST'
+      }).catch(() => { });
+    } catch (error) {
+      console.log('Cache clear not available');
+    }
+  };
 
   // Load data from backend
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     try {
+      if (forceRefresh) {
+        await clearBackendCache();
+      }
+
       const [logRes, mRes] = await Promise.allSettled([
         fetchWebhookLogs(),
         fetchMerchants(),
       ]);
-      if (logRes.status === 'fulfilled') setLogs(logRes.value.data);
-      if (mRes.status  === 'fulfilled') setMerchants(mRes.value.data);
-    } catch {
-      // silently keep demo data
+
+      if (logRes.status === 'fulfilled') {
+        const logsData = logRes.value?.data || [];
+        setLogs(logsData.length > 0 ? logsData : DEMO_LOGS);
+      }
+      if (mRes.status === 'fulfilled') {
+        const merchantsData = mRes.value?.data || [];
+        setMerchants(merchantsData.length > 0 ? merchantsData : DEMO_MERCHANTS);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
     }
     setLoading(false);
   }, []);
 
+  // Handle logout
+  const handleLogout = async () => {
+    await clearBackendCache();
+    logout();
+    navigate('/login');
+  };
+
   useEffect(() => {
-    if (authed) loadData();
-  }, [authed, loadData]);
+    loadData(true);
+  }, [loadData]);
 
-  if (!authed) return <LoginPage onLogin={() => setAuthed(true)} />;
-
-  const meta = PAGE_META[page];
+  const pageTitle = PAGE_TITLES[currentPage] || 'Dashboard';
+  const pageSubtitle = PAGE_SUBTITLES[currentPage] || '';
 
   return (
     <div className="app">
       <Sidebar
-        page={page}
-        setPage={setPage}
+        page={currentPage}
+        setPage={setCurrentPage}
         logCount={logs.length}
-        onLogout={() => setAuthed(false)}
+        onLogout={handleLogout}
       />
- 
+
       <div className="main">
-        {/* Top bar */}
+        {/* Top bar with refresh button */}
         <div className="topbar">
           <div>
-            <div className="page-title">{meta.title}</div>
-            <div className="page-subtitle">{meta.sub}</div>
+            <div className="page-title">{pageTitle}</div>
+            <div className="page-subtitle">{pageSubtitle}</div>
           </div>
           <div className="topbar-right">
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => loadData(true)}
+              style={{ marginRight: '12px' }}
+            >
+              ↻ Refresh
+            </button>
             <div className="status-dot" />
             <span className="status-label">
               {loading ? 'Loading…' : 'System Operational'}
@@ -146,11 +195,82 @@ export default function App() {
 
         {/* Pages */}
         <div className="content">
-          {page === 'overview'  && <OverviewPage  merchants={merchants} logs={logs} />}
-          {page === 'merchants' && <MerchantsPage merchants={merchants} setMerchants={setMerchants} logs={logs} />}
-          {page === 'webhooks'  && <WebhooksPage  logs={logs} merchants={merchants} onRefresh={loadData} />}
+          {currentPage === 'overview' && <OverviewPage merchants={merchants} logs={logs} onRefresh={() => loadData(true)} />}
+          {currentPage === 'merchants' && (
+            <MerchantsPage
+              merchants={merchants}
+              setMerchants={setMerchants}
+              logs={logs}
+              onRefresh={() => loadData(true)}
+            />
+          )}
+          {currentPage === 'webhooks' && <WebhooksPage logs={logs} merchants={merchants} onRefresh={() => loadData(true)} />}
+          {currentPage === 'lambda-webhooks' && <LambdaWebhooksPage logs={logs} merchants={merchants} onRefresh={() => loadData(true)} />}
         </div>
       </div>
     </div>
+  );
+}
+
+// Protected Route wrapper
+function ProtectedRoute({ children }) {
+  const { isAuthenticated, loading } = useAuth();
+  
+  if (loading) {
+    return <div className="loading-screen">Loading...</div>;
+  }
+  
+  return isAuthenticated ? children : <Navigate to="/login" replace />;
+}
+
+// Main App
+export default function App() {
+  return (
+    <AuthProvider>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Navigate to="/overview" replace />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/overview"
+          element={
+            <ProtectedRoute>
+              <AppContent />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/merchants"
+          element={
+            <ProtectedRoute>
+              <AppContent />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/webhooks"
+          element={
+            <ProtectedRoute>
+              <AppContent />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/lambda-webhooks"
+          element={
+            <ProtectedRoute>
+              <AppContent />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<Navigate to="/overview" replace />} />
+      </Routes>
+    </AuthProvider>
   );
 }

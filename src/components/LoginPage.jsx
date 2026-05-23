@@ -1,38 +1,52 @@
+// frontend/src/components/LoginPage.jsx
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Spinner } from './Common';
+import { login } from '../api';
+import { useAuth } from '../context/AuthContext';
+import mainLogo from '../assets/main_logo.png'; // If logo is in src/assets/
 
-const ADMIN_USER = process.env.REACT_APP_ADMIN_USERNAME || 'admin';
-const ADMIN_PASS = process.env.REACT_APP_ADMIN_PASSWORD || 'admin@123';
 
-export default function LoginPage({ onLogin }) {
-  const [form, setForm]     = useState({ username: '', password: '' });
-  const [error, setError]   = useState('');
+export default function LoginPage() {
+  const [form, setForm] = useState({ username: '', password: '' });
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const { login: authLogin } = useAuth();
 
-  const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
-
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setError('');
     setLoading(true);
-    setTimeout(() => {
-      if (form.username === ADMIN_USER && form.password === ADMIN_PASS) {
-        onLogin();
-      } else {
-        setError(`Invalid credentials. Use ${ADMIN_USER} / ${ADMIN_PASS}`);
+    
+    try {
+      const response = await login(form);
+      if (response.success) {
+        localStorage.setItem('admin_token', response.token);
+        authLogin(); // Update auth state
+        navigate('/overview'); // Redirect to overview page
       }
+    } catch (err) {
+      setError(err.message || 'Login failed');
+    } finally {
       setLoading(false);
-    }, 700);
+    }
   };
 
   return (
     <div className="login-page">
       <div className="login-card">
         <div className="login-logo">
+          {/* Add main logo here */}
+          <img 
+            src={mainLogo} 
+            alt="PayIn Logo" 
+            className="login-main-logo"
+          />
           <div className="logo-mark">
-            <div className="logo-icon">P</div>
+            {/* <div className="logo-icon">P</div>
             <div>
               <div className="logo-text">Pay<span>In</span></div>
-            </div>
+            </div> */}
           </div>
           <p className="login-subtitle">Admin Control Panel · Secure Access</p>
         </div>
@@ -44,7 +58,7 @@ export default function LoginPage({ onLogin }) {
             <label>Username</label>
             <input
               value={form.username}
-              onChange={(e) => set('username', e.target.value)}
+              onChange={(e) => setForm({ ...form, username: e.target.value })}
               placeholder="admin"
             />
           </div>
@@ -54,7 +68,7 @@ export default function LoginPage({ onLogin }) {
             <input
               type="password"
               value={form.password}
-              onChange={(e) => set('password', e.target.value)}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
               placeholder="••••••••"
               onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
             />
